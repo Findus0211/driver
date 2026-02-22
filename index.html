@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DRIVERID // V6.0 MASTER TELEMETRY</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Oswald:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --neon-accent: #ccff00;
+            --bg-dark: #050505;
+            --panel-bg: #111111;
+            --sector-green: #00ff00;
+            --sector-yellow: #ffff00;
+            --sector-purple: #cc00ff;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: white;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            touch-action: pan-y;
+        }
+
+        h1, h2, h3, .brand-font { font-family: 'Oswald', sans-serif; text-transform: uppercase; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: #333; }
+
+        .glass-panel { background: rgba(17, 17, 17, 0.95); backdrop-filter: blur(10px); border: 1px solid #333; }
+        .panel-border { border: 1px solid #333; }
+        
+        /* Mobile Tab Transitions */
+        .tab-content { display: none; transition: opacity 0.3s ease; }
+        .tab-content.active { display: flex; animation: fadeIn 0.3s ease forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* SVG Tyre Glow */
+        #tyre-svg { filter: drop-shadow(0 0 15px rgba(0,0,0,0.5)); transition: all 0.1s linear; }
+
+        /* Slider Styling */
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 10px; border-radius: 2px; background: var(--neon-accent); cursor: pointer; margin-top: -8px; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #333; border-radius: 2px; }
+
+        .sector-indicator { transition: all 0.3s ease; }
+        .bg-purple { background-color: var(--sector-purple); box-shadow: 0 0 10px var(--sector-purple); }
+        .bg-green { background-color: var(--sector-green); box-shadow: 0 0 10px var(--sector-green); }
+        .bg-yellow { background-color: var(--sector-yellow); box-shadow: 0 0 10px var(--sector-yellow); }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col">
+
+    <header class="flex justify-between items-center p-4 border-b border-gray-800 bg-black h-16 shrink-0 z-20 w-full">
+        <div class="flex items-center gap-4">
+            <h1 class="text-2xl font-bold italic tracking-tighter brand-font">DRIVER<span class="text-[#ccff00]">ID</span></h1>
+            <span class="text-[10px] text-gray-500 font-mono tracking-widest hidden md:inline">SYSTEM OVERRIDE ACTIVE // HARD-CODED REALITY</span>
+        </div>
+        <div id="live-clock" class="text-[#ccff00] font-mono text-sm">00:00:00</div>
+    </header>
+
+    <div class="md:hidden flex border-b border-gray-800 bg-[#0a0a0a] shrink-0" id="mobile-tabs">
+        <button class="flex-1 py-3 text-xs font-mono font-bold text-[#ccff00] border-b-2 border-[#ccff00]" data-target="col-telemetry">TELEMETRY</button>
+        <button class="flex-1 py-3 text-xs font-mono font-bold text-gray-500 border-b-2 border-transparent" data-target="col-strategy">STRATEGY</button>
+        <button class="flex-1 py-3 text-xs font-mono font-bold text-gray-500 border-b-2 border-transparent" data-target="col-comms">COMMS</button>
+    </div>
+
+    <div class="flex-1 flex flex-col md:flex-row overflow-hidden relative" id="swipe-container">
+        
+        <main id="col-telemetry" class="tab-content active flex-1 md:flex md:w-1/2 flex-col p-4 bg-[#0a0a0a] overflow-y-auto order-1 md:order-2 md:border-l md:border-r border-gray-800">
+            <div class="panel-border bg-[#111] p-6 flex flex-col items-center justify-center relative mb-4">
+                <h2 class="text-xs text-gray-500 font-mono absolute top-4 left-4">LIVE DELTA TIMING</h2>
+                
+                <div class="text-7xl md:text-8xl font-mono font-bold mt-6 mb-2 text-white tracking-tighter" id="lap-timer">00.000</div>
+                
+                <div class="flex w-full gap-2 mb-6 h-3">
+                    <div id="ui-s1" class="flex-1 bg-gray-800 sector-indicator"></div>
+                    <div id="ui-s2" class="flex-1 bg-gray-800 sector-indicator"></div>
+                    <div id="ui-s3" class="flex-1 bg-gray-800 sector-indicator"></div>
+                </div>
+
+                <div class="flex gap-4 w-full">
+                    <button id="btn-start" class="flex-1 bg-white text-black font-bold py-3 uppercase hover:bg-[#ccff00] transition-colors font-mono text-sm">START LAP</button>
+                    <button id="btn-sector" class="flex-1 bg-gray-800 text-gray-500 font-bold py-3 uppercase transition-colors font-mono text-sm cursor-not-allowed border border-gray-700" disabled>MARK SECTOR</button>
+                </div>
+            </div>
+
+            <div class="panel-border bg-[#111] p-6 flex flex-col items-center justify-center flex-1">
+                <h2 class="text-xs text-gray-500 font-mono mb-4 w-full text-left">MECHANICAL UI // TYRE HEAT</h2>
+                <svg id="tyre-svg" viewBox="0 0 100 100" class="w-48 h-48 md:w-64 md:h-64">
+                    <defs>
+                        <radialGradient id="heatGradient" cx="50%" cy="50%" r="50%">
+                            <stop offset="60%" stop-color="#111" />
+                            <stop offset="90%" stop-color="#0000ff" id="heat-stop-inner" />
+                            <stop offset="100%" stop-color="#0000ff" id="heat-stop-outer" />
+                        </radialGradient>
+                    </defs>
+                    <circle cx="50" cy="50" r="45" stroke="#222" stroke-width="8" fill="url(#heatGradient)" />
+                    <circle cx="50" cy="50" r="20" stroke="#333" stroke-width="2" fill="#050505" />
+                    <path d="M 50 10 L 50 20 M 90 50 L 80 50 M 50 90 L 50 80 M 10 50 L 20 50" stroke="#333" stroke-width="2"/>
+                    <text x="50" y="53" text-anchor="middle" fill="#fff" class="font-mono text-[8px] tracking-widest" id="heat-label">COLD</text>
+                </svg>
+            </div>
+        </main>
+
+        <aside id="col-strategy" class="tab-content md:flex md:w-1/4 flex-col p-4 bg-[#050505] overflow-y-auto order-2 md:order-3">
+            <div class="panel-border bg-[#111] p-4 mb-4">
+                <h3 class="text-xs text-gray-500 font-mono mb-4 flex items-center gap-2"><i data-lucide="fuel" class="w-4 h-4"></i> ARC-AGI-2 // FUEL LOAD CALCULATOR</h3>
+                
+                <div class="flex justify-between items-end mb-2">
+                    <span class="text-sm font-bold text-white uppercase">Starting Load</span>
+                    <span class="text-2xl font-mono text-[#ccff00]" id="fuel-display">100<span class="text-sm text-gray-500">kg</span></span>
+                </div>
+                
+                <input type="range" id="fuel-slider" min="10" max="110" value="100" class="mb-4">
+                
+                <div class="bg-black border border-gray-800 p-3 flex justify-between items-center">
+                    <span class="text-[10px] text-gray-500 font-mono">WEIGHT PENALTY CALC</span>
+                    <span class="text-sm font-mono text-red-500" id="penalty-display">+3.000s</span>
+                </div>
+                <p class="text-[9px] text-gray-600 mt-2">Constraint: 0.03s lap time penalty per 1kg of fuel. Affects predefined target sectors.</p>
+            </div>
+
+            <div class="panel-border bg-[#111] p-4 flex-1">
+                <h3 class="text-xs text-gray-500 font-mono mb-4 flex items-center gap-2"><i data-lucide="target" class="w-4 h-4"></i> TARGET SECTORS</h3>
+                
+                <div class="space-y-3 font-mono text-sm">
+                    <div class="flex justify-between border-b border-gray-800 pb-2">
+                        <span class="text-gray-400">SECTOR 1 (Base: 25.0s)</span>
+                        <span class="text-white" id="target-s1">25.000</span>
+                    </div>
+                    <div class="flex justify-between border-b border-gray-800 pb-2">
+                        <span class="text-gray-400">SECTOR 2 (Base: 35.0s)</span>
+                        <span class="text-white" id="target-s2">35.000</span>
+                    </div>
+                    <div class="flex justify-between border-b border-gray-800 pb-2">
+                        <span class="text-gray-400">SECTOR 3 (Base: 20.0s)</span>
+                        <span class="text-white" id="target-s3">20.000</span>
+                    </div>
+                    <div class="flex justify-between pt-2">
+                        <span class="text-[#ccff00] font-bold">TOTAL TARGET</span>
+                        <span class="text-[#ccff00] font-bold" id="target-total">80.000</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <aside id="col-comms" class="tab-content md:flex md:w-1/4 flex-col p-4 bg-[#050505] overflow-y-auto order-3 md:order-1">
+            <div class="panel-border bg-[#111] p-4 h-full flex flex-col">
+                <h3 class="text-xs text-gray-500 font-mono mb-4 flex items-center gap-2"><i data-lucide="radio" class="w-4 h-4"></i> PIT WALL UPLINK</h3>
+                <div class="flex-1 overflow-y-auto space-y-4 font-mono text-xs" id="log-container">
+                    <div class="text-gray-500">[SYSTEM] Master Telemetry Engine initialized.</div>
+                    <div class="text-gray-500">[SYSTEM] Awaiting lap start sequence.</div>
+                </div>
+            </div>
+        </aside>
+
+    </div>
+
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+
+        // Mobile Tab & Swipe Logic
+        const tabs = document.querySelectorAll('#mobile-tabs button');
+        const contents = document.querySelectorAll('.tab-content');
+        let currentTabIndex = 0;
+
+        function switchTab(index) {
+            if(window.innerWidth >= 768) return; // Desktop overrides
+            if(index < 0 || index >= tabs.length) return;
+            currentTabIndex = index;
+            
+            tabs.forEach(t => { t.classList.remove('text-[#ccff00]', 'border-[#ccff00]'); t.classList.add('text-gray-500', 'border-transparent'); });
+            contents.forEach(c => c.classList.remove('active'));
+            
+            tabs[currentTabIndex].classList.add('text-[#ccff00]', 'border-[#ccff00]');
+            tabs[currentTabIndex].classList.remove('text-gray-500', 'border-transparent');
+            document.getElementById(tabs[currentTabIndex].dataset.target).classList.add('active');
+        }
+
+        tabs.forEach((tab, index) => {
+            tab.addEventListener('click', () => switchTab(index));
+        });
+
+        // Swipe Detection
+        let touchStartX = 0;
+        let touchEndX = 0;
+        const swipeContainer = document.getElementById('swipe-container');
+        
+        swipeContainer.addEventListener('touchstart', e => touchStartX = e.changedTouches[0].screenX, {passive: true});
+        swipeContainer.addEventListener('touchend', e => {
+            touchEndX = e.changedTouches[0].screenX;
+            if (touchStartX - touchEndX > 50) switchTab(currentTabIndex + 1); // Swipe Left
+            if (touchEndX - touchStartX > 50) switchTab(currentTabIndex - 1); // Swipe Right
+        }, {passive: true});
+
+        // Live Header Clock
+        setInterval(() => {
+            const d = new Date();
+            document.getElementById('live-clock').innerText = d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' }) + "." + String(d.getMilliseconds()).padStart(3, '0').slice(0,1);
+        }, 100);
+
+        // System Logger
+        const logger = document.getElementById('log-container');
+        function log(msg, type="info") {
+            const div = document.createElement('div');
+            const color = type === 'success' ? 'text-green-500' : type === 'warn' ? 'text-yellow-500' : type === 'error' ? 'text-red-500' : 'text-gray-400';
+            div.className = color;
+            div.innerText = `[${(performance.now()/1000).toFixed(2)}] ${msg}`;
+            logger.appendChild(div);
+            logger.scrollTop = logger.scrollHeight;
+        }
+
+        // ==========================================
+        // MASTER TELEMETRY ENGINE
+        // ==========================================
+        class TelemetryEngine {
+            constructor() {
+                // Base Physics & Constraints
+                this.baseSectors = [25.000, 35.000, 20.000]; // Absolute base lap in seconds
+                this.fuelKg = 100;
+                this.penaltyPerKg = 0.03; // ARC-AGI-2 constraint
+                
+                // State
+                this.targetSectors = [0,0,0];
+                this.targetTotal = 0;
+                
+                this.lapActive = false;
+                this.startTime = 0;
+                this.currentSector = 0;
+                this.sectorStartTimes = [0,0,0];
+                this.animationFrame = null;
+
+                // DOM Bindings
+                this.fuelSlider = document.getElementById('fuel-slider');
+                this.fuelDisplay = document.getElementById('fuel-display');
+                this.penaltyDisplay = document.getElementById('penalty-display');
+                this.targetUIs = [document.getElementById('target-s1'), document.getElementById('target-s2'), document.getElementById('target-s3')];
+                this.targetTotalUI = document.getElementById('target-total');
+                
+                this.btnStart = document.getElementById('btn-start');
+                this.btnSector = document.getElementById('btn-sector');
+                this.timerUI = document.getElementById('lap-timer');
+                this.sectorUIs = [document.getElementById('ui-s1'), document.getElementById('ui-s2'), document.getElementById('ui-s3')];
+                
+                this.svgHeatInner = document.getElementById('heat-stop-inner');
+                this.svgHeatOuter = document.getElementById('heat-stop-outer');
+                this.svgHeatLabel = document.getElementById('heat-label');
+
+                this.bindEvents();
+                this.calculateTargets();
+            }
+
+            bindEvents() {
+                this.fuelSlider.addEventListener('input', (e) => {
+                    this.fuelKg = parseFloat(e.target.value);
+                    this.fuelDisplay.innerHTML = `${this.fuelKg}<span class="text-sm text-gray-500">kg</span>`;
+                    this.calculateTargets();
+                });
+
+                this.btnStart.addEventListener('click', () => this.startLap());
+                this.btnSector.addEventListener('click', () => this.markSector());
+            }
+
+            calculateTargets() {
+                const totalPenalty = this.fuelKg * this.penaltyPerKg;
+                this.penaltyDisplay.innerText = `+${totalPenalty.toFixed(3)}s`;
+                
+                const baseTotal = this.baseSectors.reduce((a, b) => a + b, 0);
+                this.targetTotal = baseTotal + totalPenalty;
+
+                // Distribute penalty proportionally to sector length
+                for(let i = 0; i < 3; i++) {
+                    const sectorRatio = this.baseSectors[i] / baseTotal;
+                    this.targetSectors[i] = this.baseSectors[i] + (totalPenalty * sectorRatio);
+                    this.targetUIs[i].innerText = this.targetSectors[i].toFixed(3);
+                }
+                
+                this.targetTotalUI.innerText = this.targetTotal.toFixed(3);
+                if(!this.lapActive) log(`Targets recalculated. Fuel load: ${this.fuelKg}kg.`);
+            }
+
+            startLap() {
+                if(this.lapActive) return;
+                
+                // Reset UI
+                this.sectorUIs.forEach(ui => { ui.className = 'flex-1 bg-gray-800 sector-indicator'; });
+                this.timerUI.classList.remove('text-[#ccff00]', 'text-red-500');
+                this.timerUI.classList.add('text-white');
+                
+                // State Init
+                this.lapActive = true;
+                this.currentSector = 0;
+                this.startTime = performance.now();
+                this.sectorStartTimes[0] = this.startTime;
+                
+                // Button Toggle
+                this.btnStart.disabled = true;
+                this.btnStart.classList.add('opacity-50', 'cursor-not-allowed');
+                this.btnSector.disabled = false;
+                this.btnSector.classList.remove('bg-gray-800', 'text-gray-500', 'cursor-not-allowed');
+                this.btnSector.classList.add('bg-[#ccff00]', 'text-black', 'hover:bg-white');
+                this.btnSector.innerText = "MARK SECTOR 1";
+
+                log("LAP STARTED. Timing active.", "success");
+                this.updateLoop();
+            }
+
+            markSector() {
+                if(!this.lapActive) return;
+
+                const now = performance.now();
+                const elapsedMs = now - this.sectorStartTimes[this.currentSector];
+                const elapsedSec = elapsedMs / 1000;
+                const target = this.targetSectors[this.currentSector];
+                const delta = elapsedSec - target;
+
+                // Logic Case: Compare actual time against pre-calculated target time
+                let statusClass = 'bg-yellow'; // Slow
+                let logType = 'warn';
+                let msg = `S${this.currentSector + 1} SLOW: +${delta.toFixed(3)}s`;
+
+                if (delta <= -0.1) {
+                    statusClass = 'bg-purple'; // Absolute Best
+                    logType = 'success';
+                    msg = `S${this.currentSector + 1} PURPLE: ${delta.toFixed(3)}s`;
+                } else if (delta <= 0.2) {
+                    statusClass = 'bg-green'; // Personal Best / On Target
+                    logType = 'success';
+                    msg = `S${this.currentSector + 1} GREEN: +${delta.toFixed(3)}s`;
+                }
+
+                this.sectorUIs[this.currentSector].classList.remove('bg-gray-800');
+                this.sectorUIs[this.currentSector].classList.add(statusClass);
+                log(msg, logType);
+
+                this.currentSector++;
+
+                if(this.currentSector > 2) {
+                    this.finishLap(now);
+                } else {
+                    this.sectorStartTimes[this.currentSector] = now;
+                    this.btnSector.innerText = `MARK SECTOR ${this.currentSector + 1}`;
+                }
+            }
+
+            finishLap(endTime) {
+                this.lapActive = false;
+                cancelAnimationFrame(this.animationFrame);
+                
+                const totalElapsedSec = (endTime - this.startTime) / 1000;
+                this.timerUI.innerText = totalElapsedSec.toFixed(3);
+                
+                const finalDelta = totalElapsedSec - this.targetTotal;
+                if(finalDelta <= 0) this.timerUI.classList.add('text-[#ccff00]');
+                else this.timerUI.classList.add('text-red-500');
+
+                log(`LAP FINISHED. Time: ${totalElapsedSec.toFixed(3)}s (Delta: ${finalDelta > 0 ? '+' : ''}${finalDelta.toFixed(3)}s)`, "info");
+
+                // Reset Buttons
+                this.btnSector.disabled = true;
+                this.btnSector.className = 'flex-1 bg-gray-800 text-gray-500 font-bold py-3 uppercase transition-colors font-mono text-sm cursor-not-allowed border border-gray-700';
+                this.btnSector.innerText = "MARK SECTOR";
+                
+                this.btnStart.disabled = false;
+                this.btnStart.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+
+            updateLoop() {
+                if(!this.lapActive) return;
+                
+                const now = performance.now();
+                const totalElapsed = (now - this.startTime) / 1000;
+                
+                // Update Timer
+                this.timerUI.innerText = totalElapsed.toFixed(3);
+
+                // Update SVG Tyre Heat map (Blue to Red based on lap progression)
+                // Normalize heat based on target total time. Capped at 1.0 (100% heat).
+                let heatProgression = Math.min(totalElapsed / this.targetTotal, 1.0);
+                
+                // Color Math: Blue is rgb(0,0,255), Red is rgb(255,0,0)
+                const r = Math.floor(255 * heatProgression);
+                const b = Math.floor(255 * (1 - heatProgression));
+                const colorString = `rgb(${r}, 0, ${b})`;
+                
+                this.svgHeatInner.setAttribute('stop-color', colorString);
+                this.svgHeatOuter.setAttribute('stop-color', colorString);
+
+                if (heatProgression < 0.3) this.svgHeatLabel.innerText = "COLD";
+                else if (heatProgression < 0.7) this.svgHeatLabel.innerText = "OPTIMAL";
+                else this.svgHeatLabel.innerText = "OVERHEATING";
+
+                this.animationFrame = requestAnimationFrame(() => this.updateLoop());
+            }
+        }
+
+        // Initialize Engine
+        const engine = new TelemetryEngine();
+
+    </script>
+</body>
+</html>
